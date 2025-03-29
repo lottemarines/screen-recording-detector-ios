@@ -17,6 +17,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
       }
       
+      // スクリーンショット検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -24,6 +25,16 @@ public class ScreenRecordingDetectorIosModule: Module {
       ) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onScreenshotTaken", [:])
+      }
+      
+      NotificationCenter.default.addObserver(
+        forName: UIApplication.didBecomeActiveNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        guard let self = self else { return }
+        let isCaptured = UIScreen.main.isCaptured
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
       }
     }
     
@@ -36,6 +47,11 @@ public class ScreenRecordingDetectorIosModule: Module {
       NotificationCenter.default.removeObserver(
         self,
         name: UIApplication.userDidTakeScreenshotNotification,
+        object: nil
+      )
+      NotificationCenter.default.removeObserver(
+        self,
+        name: UIApplication.didBecomeActiveNotification,
         object: nil
       )
     }
