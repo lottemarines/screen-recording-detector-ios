@@ -27,6 +27,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenshotTaken", [:])
       }
       
+      
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
