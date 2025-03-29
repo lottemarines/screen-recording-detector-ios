@@ -19,5 +19,8 @@
       "ios": true,
       "android": true
     }
+  },
+  "dependencies": {
+    "expo-modules-core": "^2.2.3"
   }
 }
