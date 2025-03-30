@@ -7,26 +7,20 @@ public class ScreenRecordingDetectorIosModule: Module {
     // JS側で利用可能なイベント名を定義
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
-    // OnCreate で初回状態を送信し、3秒後に再チェックする
+    // アプリ起動時に初回の録画状態を送信し、遅延チェックをスケジュールする
     OnCreate {
       let initialCaptured = UIScreen.main.isCaptured
-      print("[ScreenRecordingDetectorIosModule] OnCreate: isCaptured = \(initialCaptured)")
+      print("[ScreenRecordingDetectorIosModule] OnCreate: initial isCaptured = \(initialCaptured)")
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
       
-      // 遅延チェック（例: 3秒後）
-      DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-        let delayedCaptured = UIScreen.main.isCaptured
-        print("[ScreenRecordingDetectorIosModule] Delayed OnCreate check: isCaptured = \(delayedCaptured)")
-        if delayedCaptured != initialCaptured {
-          self.sendEvent("onScreenRecordingChanged", ["isCaptured": delayedCaptured])
-        }
-      }
+      // 例えば、5秒ごとに3回の遅延チェックを実施
+      self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: 3, interval: 5.0)
     }
     
     OnStartObserving {
       print("[ScreenRecordingDetectorIosModule] OnStartObserving called!")
       
-      // 画面録画（またはミラーリング）の変化を検知
+      // 画面録画（またはミラーリング）の状態変化を検知
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
         object: nil,
@@ -38,7 +32,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
       }
       
-      // スクリーンショットの検知
+      // スクリーンショット検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -49,7 +43,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに、現在の状態を再チェック
+      // アプリがフォアグラウンドに復帰したときに状態を再チェックする
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
@@ -67,6 +61,20 @@ public class ScreenRecordingDetectorIosModule: Module {
       NotificationCenter.default.removeObserver(self, name: UIScreen.capturedDidChangeNotification, object: nil)
       NotificationCenter.default.removeObserver(self, name: UIApplication.userDidTakeScreenshotNotification, object: nil)
       NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
+    }
+  }
+  
+  /// 遅延チェックを繰り返すヘルパー
+  func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
+    guard attempts > 0 else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
+      let currentCaptured = UIScreen.main.isCaptured
+      print("[ScreenRecordingDetectorIosModule] Delayed check: isCaptured = \(currentCaptured)")
+      if currentCaptured != initialCaptured {
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
+      }
+      // 次回のチェックをスケジュール
+      self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts - 1, interval: interval)
     }
   }
 }
