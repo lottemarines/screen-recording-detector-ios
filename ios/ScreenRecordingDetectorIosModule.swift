@@ -7,11 +7,20 @@ public class ScreenRecordingDetectorIosModule: Module {
     // JS側で利用可能なイベント名を定義
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
-    // モジュール作成時に現在の録画状態を一度送信する
+    // OnCreate で初回状態を送信し、3秒後に再チェックする
     OnCreate {
-      let isCaptured = UIScreen.main.isCaptured
-      print("[ScreenRecordingDetectorIosModule] OnCreate: isCaptured = \(isCaptured)")
-      self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
+      let initialCaptured = UIScreen.main.isCaptured
+      print("[ScreenRecordingDetectorIosModule] OnCreate: isCaptured = \(initialCaptured)")
+      self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
+      
+      // 遅延チェック（例: 3秒後）
+      DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        let delayedCaptured = UIScreen.main.isCaptured
+        print("[ScreenRecordingDetectorIosModule] Delayed OnCreate check: isCaptured = \(delayedCaptured)")
+        if delayedCaptured != initialCaptured {
+          self.sendEvent("onScreenRecordingChanged", ["isCaptured": delayedCaptured])
+        }
+      }
     }
     
     OnStartObserving {
@@ -24,9 +33,9 @@ public class ScreenRecordingDetectorIosModule: Module {
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        let isCaptured = UIScreen.main.isCaptured
-        print("[ScreenRecordingDetectorIosModule] UIScreen.capturedDidChangeNotification fired. isCaptured = \(isCaptured)")
-        self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
+        let currentCaptured = UIScreen.main.isCaptured
+        print("[ScreenRecordingDetectorIosModule] capturedDidChangeNotification fired. isCaptured = \(currentCaptured)")
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
       }
       
       // スクリーンショットの検知
@@ -36,20 +45,20 @@ public class ScreenRecordingDetectorIosModule: Module {
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        print("[ScreenRecordingDetectorIosModule] UIApplication.userDidTakeScreenshotNotification fired.")
+        print("[ScreenRecordingDetectorIosModule] userDidTakeScreenshotNotification fired.")
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに、録画状態を再チェックする
+      // アプリがフォアグラウンドに復帰したときに、現在の状態を再チェック
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        let isCaptured = UIScreen.main.isCaptured
-        print("[ScreenRecordingDetectorIosModule] didBecomeActiveNotification fired. isCaptured = \(isCaptured)")
-        self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
+        let activeCaptured = UIScreen.main.isCaptured
+        print("[ScreenRecordingDetectorIosModule] didBecomeActiveNotification fired. isCaptured = \(activeCaptured)")
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": activeCaptured])
       }
     }
     
