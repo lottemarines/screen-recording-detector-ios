@@ -1,4 +1,5 @@
 import ScreenRecordingDetectorIosModule from "./src/ScreenRecordingDetectorIosModule";
+
 export function addScreenRecordingListener(
   callback: (isCaptured: boolean) => void
 ) {
@@ -17,6 +18,11 @@ export function addScreenshotListener(callback: () => void) {
       callback();
     }
   );
+}
+
+// getCapturedStatus をエクスポート
+export async function getCapturedStatus(): Promise<boolean> {
+  return await ScreenRecordingDetectorIosModule.getCapturedStatus();
 }
 
 export { default as ScreenRecordingDetectorIosModule } from "./src/ScreenRecordingDetectorIosModule";
