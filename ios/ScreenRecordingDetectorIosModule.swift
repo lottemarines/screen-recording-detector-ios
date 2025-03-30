@@ -13,7 +13,7 @@ public class ScreenRecordingDetectorIosModule: Module {
       print("[ScreenRecordingDetectorIosModule] OnCreate: initial isCaptured = \(initialCaptured)")
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
       
-      // 例えば、5秒ごとに3回の遅延チェックを実施
+      // 例えば、5秒ごとに3回の遅延チェックを実施する
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: 3, interval: 5.0)
     }
     
@@ -32,7 +32,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
       }
       
-      // スクリーンショット検知
+      // スクリーンショットの検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -43,7 +43,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに状態を再チェックする
+      // アプリがフォアグラウンドに復帰したときに、現在の状態を再チェックする
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
