@@ -4,23 +4,20 @@ import UIKit
 public class ScreenRecordingDetectorIosModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
-    // JS側で利用可能なイベント名を定義
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
-    // アプリ起動時に初回の録画状態を送信し、遅延チェックをスケジュールする
     OnCreate {
       let initialCaptured = UIScreen.main.isCaptured
       print("[ScreenRecordingDetectorIosModule] OnCreate: initial isCaptured = \(initialCaptured)")
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
       
-      // 例えば、5秒ごとに3回の遅延チェックを実施する
+      // 遅延チェックもそのまま実施
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: 3, interval: 5.0)
     }
     
     OnStartObserving {
       print("[ScreenRecordingDetectorIosModule] OnStartObserving called!")
       
-      // 画面録画（またはミラーリング）の状態変化を検知
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
         object: nil,
@@ -32,7 +29,6 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
       }
       
-      // スクリーンショットの検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -43,7 +39,6 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに、現在の状態を再チェックする
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
@@ -73,8 +68,13 @@ public class ScreenRecordingDetectorIosModule: Module {
       if currentCaptured != initialCaptured {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
       }
-      // 次回のチェックをスケジュール
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts - 1, interval: interval)
     }
+  }
+  
+  /// ネイティブ側の録画状態を取得するメソッド（Promise形式）
+  @objc
+  func getCapturedStatus(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    resolve(UIScreen.main.isCaptured)
   }
 }

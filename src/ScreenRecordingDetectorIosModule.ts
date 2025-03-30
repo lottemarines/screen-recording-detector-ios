@@ -1,4 +1,5 @@
-import { EventEmitter, requireNativeModule } from "expo-modules-core";
+import type { EventEmitter } from "expo-modules-core";
+import { requireNativeModule } from "expo-modules-core";
 import { ScreenRecordingDetectorIosEvents } from "./ScreenRecordingDetectorIos.types";
 
 declare class ScreenRecordingDetectorIosModule extends EventEmitter<ScreenRecordingDetectorIosEvents> {
