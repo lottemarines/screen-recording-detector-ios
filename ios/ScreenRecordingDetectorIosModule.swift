@@ -1,13 +1,13 @@
 import ExpoModulesCore
 import UIKit
+import AudioToolbox  // AudioToolbox をインポート
 
 public class ScreenRecordingDetectorIosModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
-    // JS側で利用可能なイベント名を定義
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
-    // モジュール作成時に現在の録画状態を一度送信する
+    // アプリ起動時に初期状態を送信
     OnCreate {
       let isCaptured = UIScreen.main.isCaptured
       print("[ScreenRecordingDetectorIosModule] OnCreate: isCaptured = \(isCaptured)")
@@ -17,7 +17,7 @@ public class ScreenRecordingDetectorIosModule: Module {
     OnStartObserving {
       print("[ScreenRecordingDetectorIosModule] OnStartObserving called!")
       
-      // 画面録画（またはミラーリング）の変化を検知
+      // 画面録画（またはミラーリング）の検知
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
         object: nil,
@@ -26,10 +26,13 @@ public class ScreenRecordingDetectorIosModule: Module {
         guard let self = self else { return }
         let isCaptured = UIScreen.main.isCaptured
         print("[ScreenRecordingDetectorIosModule] UIScreen.capturedDidChangeNotification fired. isCaptured = \(isCaptured)")
+        if isCaptured {
+          self.playAlertSound()  // 録画状態ならアラート音を再生
+        }
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
       }
       
-      // スクリーンショットの検知
+      // スクリーンショット検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -37,10 +40,11 @@ public class ScreenRecordingDetectorIosModule: Module {
       ) { [weak self] _ in
         guard let self = self else { return }
         print("[ScreenRecordingDetectorIosModule] UIApplication.userDidTakeScreenshotNotification fired.")
+        self.playAlertSound()  // スクリーンショット時もアラート音を再生
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに、録画状態を再チェックする
+      // アプリがフォアグラウンドに復帰したときに状態を再チェック
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
@@ -49,6 +53,9 @@ public class ScreenRecordingDetectorIosModule: Module {
         guard let self = self else { return }
         let isCaptured = UIScreen.main.isCaptured
         print("[ScreenRecordingDetectorIosModule] didBecomeActiveNotification fired. isCaptured = \(isCaptured)")
+        if isCaptured {
+          self.playAlertSound()
+        }
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
       }
     }
@@ -59,5 +66,13 @@ public class ScreenRecordingDetectorIosModule: Module {
       NotificationCenter.default.removeObserver(self, name: UIApplication.userDidTakeScreenshotNotification, object: nil)
       NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
     }
+  }
+}
+
+extension ScreenRecordingDetectorIosModule {
+  /// システムサウンドを再生するヘルパー（アラート的な音声）
+  func playAlertSound() {
+    // ここではシステムサウンドID 1007（一般的な警告音の一例）を使用
+    AudioServicesPlaySystemSound(1007)
   }
 }
