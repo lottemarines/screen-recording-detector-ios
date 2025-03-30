@@ -4,10 +4,11 @@ import UIKit
 public class ScreenRecordingDetectorIosModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
+    // JS側で利用可能なイベント名を定義
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
+    // モジュール作成時に現在の録画状態を一度送信する
     OnCreate {
-      // アプリ起動時に一度現在の録画状態をチェックして送信する
       let isCaptured = UIScreen.main.isCaptured
       print("[ScreenRecordingDetectorIosModule] OnCreate: isCaptured = \(isCaptured)")
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
@@ -16,7 +17,7 @@ public class ScreenRecordingDetectorIosModule: Module {
     OnStartObserving {
       print("[ScreenRecordingDetectorIosModule] OnStartObserving called!")
       
-      // 画面録画（またはミラーリング）の検知
+      // 画面録画（またはミラーリング）の変化を検知
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
         object: nil,
@@ -28,7 +29,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": isCaptured])
       }
       
-      // スクリーンショット検知
+      // スクリーンショットの検知
       NotificationCenter.default.addObserver(
         forName: UIApplication.userDidTakeScreenshotNotification,
         object: nil,
@@ -39,7 +40,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.sendEvent("onScreenshotTaken", [:])
       }
       
-      // アプリがフォアグラウンドに復帰したときに状態を再チェックする
+      // アプリがフォアグラウンドに復帰したときに、録画状態を再チェックする
       NotificationCenter.default.addObserver(
         forName: UIApplication.didBecomeActiveNotification,
         object: nil,
