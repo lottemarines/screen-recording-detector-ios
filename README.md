@@ -14,8 +14,6 @@
 
 ## Installation
 
-### As a Published Package
-
 ```bash
 yarn add screen-recording-detector-ios
 ```
@@ -27,14 +25,21 @@ Import and use the module's API in your JavaScript/TypeScript code. For example:
 ```ts
 import { addScreenRecordingListener, addScreenshotListener, getCapturedStatus } from "screen-recording-detector-ios";
 
-// Adding event listeners
-const recordingListener = addScreenRecordingListener((payload) => {
-  console.log("Screen recording state changed:", payload.isCaptured);
-});
+useEffect(() => {
+  // Adding event listeners
 
-const screenshotListener = addScreenshotListener(() => {
-  console.log("Screenshot detected.");
-});
+  const recording = addScreenRecordingListener((isCaptured) => {
+    console.log("ScreenRecording detected.", isCaptured);
+  });
+
+  const screenshot = addScreenshotListener(() => {
+    console.log("Screenshot detected.");
+  });
+  return () => {
+    recording.remove();
+    screenshot.remove();
+  };
+}, []);
 
 // Getting the current screen recording status
 async function checkStatus() {
