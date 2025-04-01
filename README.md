@@ -97,7 +97,3 @@ The native (Swift) module does the following:
 ## License
 
 MIT License
-
----
-
-Feel free to modify or extend this README as needed for your project.
