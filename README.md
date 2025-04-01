@@ -26,8 +26,8 @@ Import and use the module's API in your JavaScript/TypeScript code. For example:
 import { addScreenRecordingListener, addScreenshotListener, getCapturedStatus } from "screen-recording-detector-ios";
 
 useEffect(() => {
-  // Adding event listeners
 
+  // Adding event listeners
   const recording = addScreenRecordingListener((isCaptured) => {
     console.log("ScreenRecording detected.", isCaptured);
   });
@@ -35,10 +35,12 @@ useEffect(() => {
   const screenshot = addScreenshotListener(() => {
     console.log("Screenshot detected.");
   });
+
   return () => {
     recording.remove();
     screenshot.remove();
   };
+
 }, []);
 
 // Getting the current screen recording status
