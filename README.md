@@ -16,44 +16,9 @@
 
 ### As a Published Package
 
-Install with yarn:
-
 ```bash
 yarn add screen-recording-detector-ios
 ```
-
-Or with npm:
-
-```bash
-npm install screen-recording-detector-ios
-```
-
-### As a Local Module
-
-If you are managing the module locally, add the following to your host app's `package.json`:
-
-```json
-"dependencies": {
-  "screen-recording-detector-ios": "file:./modules/screen-recording-detector-ios"
-}
-```
-
-## Expo Integration
-
-If your module requires additional native configuration, add it via a config plugin. For example, in your host app's `app.config.js`:
-
-```js
-module.exports = {
-  expo: {
-    // other settings...
-    plugins: [
-      "screen-recording-detector-ios"
-    ]
-  }
-};
-```
-
-If no additional native configuration is required, you can omit the plugin configuration.
 
 ## Usage
 
