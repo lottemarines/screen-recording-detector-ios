@@ -1,7 +1,3 @@
-Below is a plain, simple README written in Markdown for your **screen-recording-detector-ios** library. You can copy and paste this into your repository's README.md file:
-
----
-
 # screen-recording-detector-ios
 
 **screen-recording-detector-ios** is a custom native module for iOS built with the Expo Modules API. It detects changes in screen recording (including mirroring) and screenshot events, sending these events to the JavaScript side. The module also performs delayed status checks at app startup to help update the recording status even if the app is terminated and relaunched.
