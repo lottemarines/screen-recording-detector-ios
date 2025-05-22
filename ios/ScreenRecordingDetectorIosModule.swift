@@ -11,46 +11,48 @@ extension UIApplication {
   }
 }
 
-// 画像にぼかし効果を適用するための拡張
+// UIKit のブラーエフェクトを簡易に適用する拡張
 extension UIImage {
+  /// LightEffect（淡いぼかし）を適用
   func applyLightEffect() -> UIImage? {
-    return self.applyBlur(radius: 30, tintColor: UIColor(white: 1.0, alpha: 0.3), saturationDeltaFactor: 1.8)
+    return self.applyBlur(radius: 20, tintColor: UIColor(white: 1.0, alpha: 0.3), saturationDeltaFactor: 1.8)
   }
   
-  // 以下は Apple の UIImage+ImageEffects 実装をコピペ
-  func applyBlur(radius blurRadius: CGFloat, tintColor: UIColor?, saturationDeltaFactor: CGFloat) -> UIImage? {
+  /// Apple サンプルをベースにした GaussianBlur + Saturation
+  private func applyBlur(radius blurRadius: CGFloat, tintColor: UIColor?, saturationDeltaFactor: CGFloat) -> UIImage? {
     guard let cgImage = self.cgImage else { return nil }
     let imageRect = CGRect(origin: .zero, size: size)
     var effectImage = self
-    
+
     UIGraphicsBeginImageContextWithOptions(size, false, scale)
     defer { UIGraphicsEndImageContext() }
-    
+
     guard let context = UIGraphicsGetCurrentContext() else { return nil }
     context.scaleBy(x: 1.0, y: -1.0)
     context.translateBy(x: 0, y: -size.height)
     context.draw(cgImage, in: imageRect)
-    
+
     if let tintColor = tintColor {
       context.setFillColor(tintColor.cgColor)
       context.fill(imageRect)
     }
-    
-    if blurRadius > 0 {
-      let inputImage = CIImage(image: effectImage)
+
+    if blurRadius > 0, let inputImage = CIImage(image: effectImage) {
       let filter = CIFilter(name: "CIGaussianBlur")
       filter?.setValue(inputImage, forKey: kCIInputImageKey)
       filter?.setValue(blurRadius, forKey: kCIInputRadiusKey)
       if let outputImage = filter?.outputImage {
-        effectImage = UIImage(ciImage: outputImage)
+        effectImage = UIImage(ciImage: outputImage.cropped(to: inputImage.extent))
         effectImage.draw(in: imageRect)
       }
     }
+
     return UIGraphicsGetImageFromCurrentImageContext()
   }
 }
 
 public class ScreenRecordingDetectorIosModule: Module {
+  // MARK: - Properties
   private var obfuscatingView: UIImageView?
   private var protectionEnabled = false
   private var secureField: UITextField?
@@ -59,40 +61,31 @@ public class ScreenRecordingDetectorIosModule: Module {
     Name("ScreenRecordingDetectorIos")
     Events("onScreenRecordingChanged", "onScreenshotTaken")
 
+    // 初回ステータス通知＋遅延チェック
     OnCreate {
       let initial = UIScreen.main.isCaptured
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initial])
       self.scheduleDelayedChecks(initialCaptured: initial, attempts: 3, interval: 5.0)
     }
 
+    // 通知登録
     OnStartObserving {
-      NotificationCenter.default.addObserver(
-        forName: UIScreen.capturedDidChangeNotification,
-        object: nil, queue: .main) { [weak self] _ in
-          guard let self = self else { return }
-          let current = UIScreen.main.isCaptured
-          self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
+      let nc = NotificationCenter.default
+      nc.addObserver(forName: UIScreen.capturedDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+        guard let self = self else { return }
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": UIScreen.main.isCaptured])
       }
-      NotificationCenter.default.addObserver(
-        forName: UIApplication.userDidTakeScreenshotNotification,
-        object: nil, queue: .main) { [weak self] _ in
-          guard let self = self else { return }
-          self.sendEvent("onScreenshotTaken", [:])
-          self.handleScreenshotBlur()
+      nc.addObserver(forName: UIApplication.userDidTakeScreenshotNotification, object: nil, queue: .main) { [weak self] _ in
+        guard let self = self else { return }
+        self.sendEvent("onScreenshotTaken", [:])
+        self.applyBlurOverlay()
       }
-      NotificationCenter.default.addObserver(
-        forName: UIApplication.willResignActiveNotification,
-        object: nil, queue: .main) { [weak self] _ in
-          guard let self = self else { return }
-          self.handleAppResignBlur()
+      nc.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+        self?.applyBlurOverlay()
       }
-      NotificationCenter.default.addObserver(
-        forName: UIApplication.didBecomeActiveNotification,
-        object: nil, queue: .main) { [weak self] _ in
-          guard let self = self else { return }
-          self.removeBlur()
-          let current = UIScreen.main.isCaptured
-          self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
+      nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+        self?.removeBlurOverlay()
+        self?.sendEvent("onScreenRecordingChanged", ["isCaptured": UIScreen.main.isCaptured])
       }
     }
 
@@ -100,14 +93,15 @@ public class ScreenRecordingDetectorIosModule: Module {
       NotificationCenter.default.removeObserver(self)
     }
 
+    // MARK: - Public API
     Function("getCapturedStatus") { () -> Bool in
       UIScreen.main.isCaptured
     }
     Function("setProtectionEnabled") { (enabled: Bool) in
       self.protectionEnabled = enabled
-      if !enabled { self.removeBlur() }
+      if !enabled { self.removeBlurOverlay() }
     }
-    Function("enableSecureView") { () in
+    Function("enableSecureView") {
       guard let window = UIApplication.shared.activeWindow else { return }
       DispatchQueue.main.async {
         let tf = UITextField(frame: window.bounds)
@@ -118,7 +112,7 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.secureField = tf
       }
     }
-    Function("disableSecureView") { () in
+    Function("disableSecureView") {
       DispatchQueue.main.async {
         self.secureField?.removeFromSuperview()
         self.secureField = nil
@@ -126,44 +120,41 @@ public class ScreenRecordingDetectorIosModule: Module {
     }
   }
 
+  // MARK: - Private Helpers
   private func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
     guard attempts > 0 else { return }
-    DispatchQueue.main.asyncAfter(deadline: .now()+interval) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
       let current = UIScreen.main.isCaptured
       if current != initialCaptured {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
       }
-      self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts-1, interval: interval)
+      self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts - 1, interval: interval)
     }
   }
 
-  private func handleAppResignBlur() {
+  private func applyBlurOverlay() {
     guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
-    UIGraphicsBeginImageContext(window.bounds.size)
+    // スクリーンショット用にキャプチャしてぼかし
+    UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
     window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
     let snapshot = UIGraphicsGetImageFromCurrentImageContext()
     UIGraphicsEndImageContext()
-    guard let image = snapshot?.applyLightEffect() else { return }
+    guard let blurred = snapshot?.applyLightEffect() else { return }
     let iv = UIImageView(frame: window.bounds)
-    iv.image = image
-    iv.tag = 8888
+    iv.image = blurred
+    iv.tag = 0xB10B  // arbitrary tag
     window.addSubview(iv)
     obfuscatingView = iv
-  }
-
-  private func handleScreenshotBlur() {
-    guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
-    // 同様にぼかし
-    handleAppResignBlur()
     // 数秒後に解除
-    DispatchQueue.main.asyncAfter(deadline: .now()+2.0) {
-      self.removeBlur()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+      self.removeBlurOverlay()
     }
   }
 
-  private func removeBlur() {
+  private func removeBlurOverlay() {
     DispatchQueue.main.async {
-      if let iv = self.obfuscatingView { iv.removeFromSuperview(); self.obfuscatingView = nil }
+      self.obfuscatingView?.removeFromSuperview()
+      self.obfuscatingView = nil
     }
   }
 }
