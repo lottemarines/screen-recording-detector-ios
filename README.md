@@ -4,12 +4,13 @@
 
 ## Features
 
-- **Screen Recording Detection**  
-  - Listens for changes in the screen recording state via `UIScreen.capturedDidChangeNotification`.  
-  - Checks the recording state when the app becomes active via `UIApplication.didBecomeActiveNotification`.  
+- **Screen Recording Detection**
+
+  - Listens for changes in the screen recording state via `UIScreen.capturedDidChangeNotification`.
+  - Checks the recording state when the app becomes active via `UIApplication.didBecomeActiveNotification`.
   - Schedules delayed checks at startup to capture any delayed updates.
 
-- **Screenshot Detection**  
+- **Screenshot Detection**
   - Detects screenshot events using `UIApplication.userDidTakeScreenshotNotification`.
 
 ## Installation
@@ -23,10 +24,13 @@ yarn add screen-recording-detector-ios
 Import and use the module's API in your JavaScript/TypeScript code. For example:
 
 ```ts
-import { addScreenRecordingListener, addScreenshotListener, getCapturedStatus } from "screen-recording-detector-ios";
+import {
+  addScreenRecordingListener,
+  addScreenshotListener,
+  getCapturedStatus,
+} from "screen-recording-detector-ios";
 
 useEffect(() => {
-
   // Adding event listeners
   const recording = addScreenRecordingListener((isCaptured) => {
     console.log("ScreenRecording detected.", isCaptured);
@@ -40,7 +44,6 @@ useEffect(() => {
     recording.remove();
     screenshot.remove();
   };
-
 }, []);
 
 // Getting the current screen recording status
@@ -54,16 +57,18 @@ async function checkStatus() {
 
 The native (Swift) module does the following:
 
-- **OnCreate**:  
+- **OnCreate**:
+
   - Sends the initial screen recording state at app launch.
   - Schedules delayed checks (e.g., every 5 seconds for 3 attempts) to update the state.
 
-- **OnStartObserving**:  
+- **OnStartObserving**:
+
   - Observes `UIScreen.capturedDidChangeNotification` to detect changes.
   - Observes `UIApplication.userDidTakeScreenshotNotification` to detect screenshots.
   - Observes `UIApplication.didBecomeActiveNotification` to re-check the state when the app returns to the foreground.
 
-- **OnStopObserving**:  
+- **OnStopObserving**:
   - Removes all observers when the module is no longer needed.
 
 ## License
