@@ -3,8 +3,10 @@ import UIKit
 
 public class ScreenRecordingDetectorIosModule: Module {
   
+  // MARK: - プロパティ
   private var obfuscatingView: UIView?
   private var protectionEnabled = false
+  private var secureField: UITextField?
   
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
@@ -64,6 +66,7 @@ public class ScreenRecordingDetectorIosModule: Module {
       NotificationCenter.default.removeObserver(self)
     }
     
+    // MARK: - 公開メソッド
     Function("getCapturedStatus") { () -> Bool in
       UIScreen.main.isCaptured
     }
@@ -74,8 +77,25 @@ public class ScreenRecordingDetectorIosModule: Module {
         self.removeObfuscatingView()
       }
     }
+    
+    // MARK: - Secure TextField Hack
+    Function("enableSecureView") { () -> Void in
+      guard let window = UIApplication.shared.keyWindow else { return }
+      let tf = UITextField(frame: window.bounds)
+      tf.isSecureTextEntry = true
+      tf.backgroundColor = UIColor.clear
+      tf.isUserInteractionEnabled = false
+      window.addSubview(tf)
+      self.secureField = tf
+    }
+    
+    Function("disableSecureView") { () -> Void in
+      self.secureField?.removeFromSuperview()
+      self.secureField = nil
+    }
   }
   
+  // MARK: - 遅延チェック
   private func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
     guard attempts > 0 else { return }
     DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
@@ -87,11 +107,11 @@ public class ScreenRecordingDetectorIosModule: Module {
     }
   }
   
+  // MARK: - オーバーレイ
   private func handleAppWillResignActiveIfNeeded() {
     guard protectionEnabled else { return }
     guard let window = UIApplication.shared.keyWindow else { return }
     
-    // バックグラウンド遷移時にスクリーンを黒塗り
     let overlay = UIView(frame: window.bounds)
     overlay.backgroundColor = UIColor.black
     overlay.alpha = 1.0
@@ -101,7 +121,6 @@ public class ScreenRecordingDetectorIosModule: Module {
   }
   
   private func handleAppDidBecomeActiveIfNeeded() {
-    // アクティブ復帰時に黒塗りをフェードアウトで削除
     guard let overlay = obfuscatingView else { return }
     UIView.animate(withDuration: 0.3, animations: {
       overlay.alpha = 0
@@ -115,7 +134,6 @@ public class ScreenRecordingDetectorIosModule: Module {
     guard protectionEnabled else { return }
     guard let window = UIApplication.shared.keyWindow else { return }
     
-    // スクショ後すぐに黒塗りオーバーレイ
     let overlay = UIView(frame: window.bounds)
     overlay.backgroundColor = UIColor.black
     overlay.alpha = 1.0
@@ -123,7 +141,6 @@ public class ScreenRecordingDetectorIosModule: Module {
     window.addSubview(overlay)
     obfuscatingView = overlay
     
-    // 数秒後に解除
     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
       self.handleAppDidBecomeActiveIfNeeded()
     }

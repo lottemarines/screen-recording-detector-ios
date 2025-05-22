@@ -8,6 +8,8 @@ declare class ScreenRecordingDetectorIosModule extends EventEmitter<ScreenRecord
   setValueAsync(value: string): Promise<void>;
   getCapturedStatus(): Promise<boolean>;
   setProtectionEnabled(enabled: boolean): void;
+  enableSecureView(): void;
+  disableSecureView(): void;
 }
 
 export default requireNativeModule<ScreenRecordingDetectorIosModule>(

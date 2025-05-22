@@ -8,4 +8,6 @@ export interface ScreenRecordingDetectorIosModuleInterface
   extends InstanceType<typeof EventEmitter> {
   getCapturedStatus(): Promise<boolean>;
   setProtectionEnabled(enabled: boolean): void;
+  enableSecureView(): void;
+  disableSecureView(): void;
 }

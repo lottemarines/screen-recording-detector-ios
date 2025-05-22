@@ -28,4 +28,12 @@ export function setProtectionEnabled(enabled: boolean): void {
   ScreenRecordingDetectorIosModule.setProtectionEnabled(enabled);
 }
 
+export function enableSecureView(): void {
+  ScreenRecordingDetectorIosModule.enableSecureView();
+}
+
+export function disableSecureView(): void {
+  ScreenRecordingDetectorIosModule.disableSecureView();
+}
+
 export { default as ScreenRecordingDetectorIosModule } from "./src/ScreenRecordingDetectorIosModule";
