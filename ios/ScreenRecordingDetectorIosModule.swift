@@ -42,7 +42,8 @@ extension UIImage {
       filter?.setValue(inputImage, forKey: kCIInputImageKey)
       filter?.setValue(blurRadius, forKey: kCIInputRadiusKey)
       if let outputImage = filter?.outputImage {
-        effectImage = UIImage(ciImage: outputImage.cropped(to: inputImage.extent))
+        let cropped = outputImage.cropped(to: inputImage.extent)
+        effectImage = UIImage(ciImage: cropped)
         effectImage.draw(in: imageRect)
       }
     }
@@ -102,11 +103,12 @@ public class ScreenRecordingDetectorIosModule: Module {
       if !enabled { self.removeBlurOverlay() }
     }
     Function("enableSecureView") {
+      // Secure TextField ハック：スクショ撮影時に画面を隠蔽
       guard let window = UIApplication.shared.activeWindow else { return }
       DispatchQueue.main.async {
         let tf = UITextField(frame: window.bounds)
         tf.isSecureTextEntry = true
-        tf.backgroundColor = .black
+        tf.backgroundColor = .clear  // 透明のままにして、見た目は変えない
         tf.isUserInteractionEnabled = false
         window.addSubview(tf)
         self.secureField = tf
@@ -134,7 +136,6 @@ public class ScreenRecordingDetectorIosModule: Module {
 
   private func applyBlurOverlay() {
     guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
-    // スクリーンショット用にキャプチャしてぼかし
     UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
     window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
     let snapshot = UIGraphicsGetImageFromCurrentImageContext()
@@ -142,10 +143,9 @@ public class ScreenRecordingDetectorIosModule: Module {
     guard let blurred = snapshot?.applyLightEffect() else { return }
     let iv = UIImageView(frame: window.bounds)
     iv.image = blurred
-    iv.tag = 0xB10B  // arbitrary tag
+    iv.tag = 0xB10B
     window.addSubview(iv)
     obfuscatingView = iv
-    // 数秒後に解除
     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
       self.removeBlurOverlay()
     }
