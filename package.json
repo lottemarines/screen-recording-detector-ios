@@ -2,8 +2,9 @@
   "name": "screen-recording-detector-ios",
   "version": "1.1.7",
   "scripts": {
-    "deploy-patch": "npm version patch && npm publish --access public",
-    "deploy-minor": "npm version minor && npm publish --access public"
+    "deploy-patch": "npm version patch",
+    "deploy-minor": "npm version minor",
+    "publish": "npm publish --access public"
   },
   "main": "./index.ts",
   "types": "./index.ts",
