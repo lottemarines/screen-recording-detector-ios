@@ -2,31 +2,31 @@ import ExpoModulesCore
 import UIKit
 
 public class ScreenRecordingDetectorIosModule: Module {
+  
+  private var obfuscatingView: UIView?
+  private var protectionEnabled = false
+  
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
+    // デフォルトで初回のキャプチャ状態を通知
     OnCreate {
       let initialCaptured = UIScreen.main.isCaptured
-      print("[ScreenRecordingDetectorIosModule] OnCreate: initial isCaptured = \(initialCaptured)")
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
-      
-      // 遅延チェックもそのまま実施
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: 3, interval: 5.0)
     }
     
+    // リスナー開始時に通知登録
     OnStartObserving {
-      print("[ScreenRecordingDetectorIosModule] OnStartObserving called!")
-      
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
         object: nil,
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        let currentCaptured = UIScreen.main.isCaptured
-        print("[ScreenRecordingDetectorIosModule] capturedDidChangeNotification fired. isCaptured = \(currentCaptured)")
-        self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
+        let current = UIScreen.main.isCaptured
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
       }
       
       NotificationCenter.default.addObserver(
@@ -35,8 +35,17 @@ public class ScreenRecordingDetectorIosModule: Module {
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        print("[ScreenRecordingDetectorIosModule] userDidTakeScreenshotNotification fired.")
         self.sendEvent("onScreenshotTaken", [:])
+        self.handleScreenshotIfNeeded()
+      }
+      
+      NotificationCenter.default.addObserver(
+        forName: UIApplication.willResignActiveNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        guard let self = self else { return }
+        self.handleAppWillResignActiveIfNeeded()
       }
       
       NotificationCenter.default.addObserver(
@@ -45,36 +54,85 @@ public class ScreenRecordingDetectorIosModule: Module {
         queue: .main
       ) { [weak self] _ in
         guard let self = self else { return }
-        let activeCaptured = UIScreen.main.isCaptured
-        print("[ScreenRecordingDetectorIosModule] didBecomeActiveNotification fired. isCaptured = \(activeCaptured)")
-        self.sendEvent("onScreenRecordingChanged", ["isCaptured": activeCaptured])
+        self.handleAppDidBecomeActiveIfNeeded()
+        let current = UIScreen.main.isCaptured
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
       }
     }
     
     OnStopObserving {
-      print("[ScreenRecordingDetectorIosModule] OnStopObserving called!")
-      NotificationCenter.default.removeObserver(self, name: UIScreen.capturedDidChangeNotification, object: nil)
-      NotificationCenter.default.removeObserver(self, name: UIApplication.userDidTakeScreenshotNotification, object: nil)
-      NotificationCenter.default.removeObserver(self, name: UIApplication.didBecomeActiveNotification, object: nil)
+      NotificationCenter.default.removeObserver(self)
+    }
+    
+    Function("getCapturedStatus") { () -> Bool in
+      UIScreen.main.isCaptured
+    }
+    
+    Function("setProtectionEnabled") { (enabled: Bool) in
+      self.protectionEnabled = enabled
+      if !enabled {
+        self.removeObfuscatingView()
+      }
     }
   }
   
-  /// 遅延チェックを繰り返すヘルパー
-  func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
+  private func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
     guard attempts > 0 else { return }
     DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
-      let currentCaptured = UIScreen.main.isCaptured
-      print("[ScreenRecordingDetectorIosModule] Delayed check: isCaptured = \(currentCaptured)")
-      if currentCaptured != initialCaptured {
-        self.sendEvent("onScreenRecordingChanged", ["isCaptured": currentCaptured])
+      let current = UIScreen.main.isCaptured
+      if current != initialCaptured {
+        self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
       }
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts - 1, interval: interval)
     }
   }
   
-  /// ネイティブ側の録画状態を取得するメソッド（Promise形式）
-  @objc
-  func getCapturedStatus(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve(UIScreen.main.isCaptured)
+  private func handleAppWillResignActiveIfNeeded() {
+    guard protectionEnabled else { return }
+    guard let window = UIApplication.shared.keyWindow else { return }
+    
+    // バックグラウンド遷移時にスクリーンを黒塗り
+    let overlay = UIView(frame: window.bounds)
+    overlay.backgroundColor = UIColor.black
+    overlay.alpha = 1.0
+    overlay.tag = 9999
+    window.addSubview(overlay)
+    obfuscatingView = overlay
+  }
+  
+  private func handleAppDidBecomeActiveIfNeeded() {
+    // アクティブ復帰時に黒塗りをフェードアウトで削除
+    guard let overlay = obfuscatingView else { return }
+    UIView.animate(withDuration: 0.3, animations: {
+      overlay.alpha = 0
+    }) { _ in
+      overlay.removeFromSuperview()
+      self.obfuscatingView = nil
+    }
+  }
+  
+  private func handleScreenshotIfNeeded() {
+    guard protectionEnabled else { return }
+    guard let window = UIApplication.shared.keyWindow else { return }
+    
+    // スクショ後すぐに黒塗りオーバーレイ
+    let overlay = UIView(frame: window.bounds)
+    overlay.backgroundColor = UIColor.black
+    overlay.alpha = 1.0
+    overlay.tag = 9999
+    window.addSubview(overlay)
+    obfuscatingView = overlay
+    
+    // 数秒後に解除
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+      self.handleAppDidBecomeActiveIfNeeded()
+    }
+  }
+  
+  private func removeObfuscatingView() {
+    if let overlay = obfuscatingView {
+      overlay.removeFromSuperview()
+      obfuscatingView = nil
+    }
   }
 }

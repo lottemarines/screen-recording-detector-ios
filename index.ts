@@ -20,9 +20,12 @@ export function addScreenshotListener(callback: () => void) {
   );
 }
 
-// getCapturedStatus をエクスポート
 export async function getCapturedStatus(): Promise<boolean> {
   return await ScreenRecordingDetectorIosModule.getCapturedStatus();
+}
+
+export function setProtectionEnabled(enabled: boolean): void {
+  ScreenRecordingDetectorIosModule.setProtectionEnabled(enabled);
 }
 
 export { default as ScreenRecordingDetectorIosModule } from "./src/ScreenRecordingDetectorIosModule";
