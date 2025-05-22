@@ -1,6 +1,16 @@
 import ExpoModulesCore
 import UIKit
 
+extension UIApplication {
+  /// iOS13+ でも keyWindow の代わりにアクティブな window を安全に取得
+  var activeWindow: UIWindow? {
+    return connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first { $0.isKeyWindow }
+  }
+}
+
 public class ScreenRecordingDetectorIosModule: Module {
   
   // MARK: - プロパティ
@@ -12,14 +22,12 @@ public class ScreenRecordingDetectorIosModule: Module {
     Name("ScreenRecordingDetectorIos")
     Events("onScreenRecordingChanged", "onScreenshotTaken")
     
-    // デフォルトで初回のキャプチャ状態を通知
     OnCreate {
       let initialCaptured = UIScreen.main.isCaptured
       self.sendEvent("onScreenRecordingChanged", ["isCaptured": initialCaptured])
       self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: 3, interval: 5.0)
     }
     
-    // リスナー開始時に通知登録
     OnStartObserving {
       NotificationCenter.default.addObserver(
         forName: UIScreen.capturedDidChangeNotification,
@@ -80,18 +88,22 @@ public class ScreenRecordingDetectorIosModule: Module {
     
     // MARK: - Secure TextField Hack
     Function("enableSecureView") { () -> Void in
-      guard let window = UIApplication.shared.keyWindow else { return }
-      let tf = UITextField(frame: window.bounds)
-      tf.isSecureTextEntry = true
-      tf.backgroundColor = UIColor.clear
-      tf.isUserInteractionEnabled = false
-      window.addSubview(tf)
-      self.secureField = tf
+      guard let window = UIApplication.shared.activeWindow else { return }
+      DispatchQueue.main.async {
+        let tf = UITextField(frame: window.bounds)
+        tf.isSecureTextEntry = true
+        tf.backgroundColor = .clear
+        tf.isUserInteractionEnabled = false
+        window.addSubview(tf)
+        self.secureField = tf
+      }
     }
     
     Function("disableSecureView") { () -> Void in
-      self.secureField?.removeFromSuperview()
-      self.secureField = nil
+      DispatchQueue.main.async {
+        self.secureField?.removeFromSuperview()
+        self.secureField = nil
+      }
     }
   }
   
@@ -109,47 +121,50 @@ public class ScreenRecordingDetectorIosModule: Module {
   
   // MARK: - オーバーレイ
   private func handleAppWillResignActiveIfNeeded() {
-    guard protectionEnabled else { return }
-    guard let window = UIApplication.shared.keyWindow else { return }
-    
+    guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
     let overlay = UIView(frame: window.bounds)
-    overlay.backgroundColor = UIColor.black
+    overlay.backgroundColor = .black
     overlay.alpha = 1.0
     overlay.tag = 9999
-    window.addSubview(overlay)
-    obfuscatingView = overlay
+    DispatchQueue.main.async {
+      window.addSubview(overlay)
+      self.obfuscatingView = overlay
+    }
   }
   
   private func handleAppDidBecomeActiveIfNeeded() {
     guard let overlay = obfuscatingView else { return }
-    UIView.animate(withDuration: 0.3, animations: {
-      overlay.alpha = 0
-    }) { _ in
-      overlay.removeFromSuperview()
-      self.obfuscatingView = nil
+    DispatchQueue.main.async {
+      UIView.animate(withDuration: 0.3, animations: {
+        overlay.alpha = 0
+      }) { _ in
+        overlay.removeFromSuperview()
+        self.obfuscatingView = nil
+      }
     }
   }
   
   private func handleScreenshotIfNeeded() {
-    guard protectionEnabled else { return }
-    guard let window = UIApplication.shared.keyWindow else { return }
-    
+    guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
     let overlay = UIView(frame: window.bounds)
-    overlay.backgroundColor = UIColor.black
+    overlay.backgroundColor = .black
     overlay.alpha = 1.0
     overlay.tag = 9999
-    window.addSubview(overlay)
-    obfuscatingView = overlay
-    
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-      self.handleAppDidBecomeActiveIfNeeded()
+    DispatchQueue.main.async {
+      window.addSubview(overlay)
+      self.obfuscatingView = overlay
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        self.handleAppDidBecomeActiveIfNeeded()
+      }
     }
   }
   
   private func removeObfuscatingView() {
     if let overlay = obfuscatingView {
-      overlay.removeFromSuperview()
-      obfuscatingView = nil
+      DispatchQueue.main.async {
+        overlay.removeFromSuperview()
+        self.obfuscatingView = nil
+      }
     }
   }
 }
