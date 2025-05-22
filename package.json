@@ -1,6 +1,6 @@
 {
   "name": "screen-recording-detector-ios",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "scripts": {
     "deploy-patch": "git add . && git commit -m 'chore: pre-release commit' && npm version patch -m 'chore: bump version to %s' && git push --follow-tags && npm publish --access public",
     "deploy-minor": "git add . && git commit -m 'chore: pre-release commit' && npm version minor -m 'chore: bump version to %s' && git push --follow-tags && npm publish --access public"
