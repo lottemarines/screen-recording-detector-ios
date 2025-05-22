@@ -1,6 +1,6 @@
 {
   "name": "screen-recording-detector-ios",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "scripts": {
     "deploy-patch": "npm version patch && npm publish --access public",
     "deploy-minor": "npm version minor && npm publish --access public"
