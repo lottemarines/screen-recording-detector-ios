@@ -4,7 +4,7 @@ import UIKit
 extension UIApplication {
   /// iOS13+ でも keyWindow の代わりにアクティブな window を安全に取得
   var activeWindow: UIWindow? {
-    return connectedScenes
+    connectedScenes
       .compactMap { $0 as? UIWindowScene }
       .flatMap { $0.windows }
       .first { $0.isKeyWindow }
@@ -15,12 +15,12 @@ extension UIApplication {
 extension UIImage {
   /// LightEffect（淡いぼかし）を適用
   func applyLightEffect() -> UIImage? {
-    return self.applyBlur(radius: 20, tintColor: UIColor(white: 1.0, alpha: 0.3), saturationDeltaFactor: 1.8)
+    return applyBlur(radius: 20, tintColor: UIColor(white: 1.0, alpha: 0.3), saturationDeltaFactor: 1.8)
   }
-  
+
   /// Apple サンプルをベースにした GaussianBlur + Saturation
   private func applyBlur(radius blurRadius: CGFloat, tintColor: UIColor?, saturationDeltaFactor: CGFloat) -> UIImage? {
-    guard let cgImage = self.cgImage else { return nil }
+    guard let cgImage = cgImage else { return nil }
     let imageRect = CGRect(origin: .zero, size: size)
     var effectImage = self
 
@@ -79,12 +79,10 @@ public class ScreenRecordingDetectorIosModule: Module {
       nc.addObserver(forName: UIApplication.userDidTakeScreenshotNotification, object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onScreenshotTaken", [:])
-        // スクリーンショット直後に SecureTextField とブラーを掛ける
-        self.enableSecureView()
+        self.insertSecureTextField()
         self.applyBlurOverlay()
-        // 数秒後に解除
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-          self.disableSecureView()
+          self.removeSecureTextField()
           self.removeBlurOverlay()
         }
       }
@@ -109,23 +107,11 @@ public class ScreenRecordingDetectorIosModule: Module {
       self.protectionEnabled = enabled
       if !enabled { self.removeBlurOverlay() }
     }
-    Function("enableSecureView") {
-      guard let window = UIApplication.shared.activeWindow else { return }
-      DispatchQueue.main.async {
-        // SecureTextFieldハック: スクショ用に真っ黒レイヤー
-        let tf = UITextField(frame: window.bounds)
-        tf.isSecureTextEntry = true
-        tf.backgroundColor = .black
-        tf.isUserInteractionEnabled = false
-        window.addSubview(tf)
-        self.secureField = tf
-      }
+    Function("enableSecureView") { [weak self] in
+      self?.insertSecureTextField()
     }
-    Function("disableSecureView") {
-      DispatchQueue.main.async {
-        self.secureField?.removeFromSuperview()
-        self.secureField = nil
-      }
+    Function("disableSecureView") { [weak self] in
+      self?.removeSecureTextField()
     }
   }
 
@@ -141,9 +127,30 @@ public class ScreenRecordingDetectorIosModule: Module {
     }
   }
 
+  /// キャプチャレイヤーを隠す黒い SecureTextField を挿入
+  private func insertSecureTextField() {
+    guard let window = UIApplication.shared.activeWindow else { return }
+    DispatchQueue.main.async {
+      let tf = UITextField(frame: window.bounds)
+      tf.isSecureTextEntry = true
+      tf.backgroundColor = .black
+      tf.isUserInteractionEnabled = false
+      window.addSubview(tf)
+      self.secureField = tf
+    }
+  }
+
+  /// SecureTextField を削除
+  private func removeSecureTextField() {
+    DispatchQueue.main.async {
+      self.secureField?.removeFromSuperview()
+      self.secureField = nil
+    }
+  }
+
+  /// 画面をキャプチャしてブラーオーバーレイを表示
   private func applyBlurOverlay() {
     guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
-    // 画面をキャプチャしてぼかし
     UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
     window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
     let snapshot = UIGraphicsGetImageFromCurrentImageContext()
@@ -156,6 +163,7 @@ public class ScreenRecordingDetectorIosModule: Module {
     obfuscatingView = iv
   }
 
+  /// ブラーオーバーレイを削除
   private func removeBlurOverlay() {
     DispatchQueue.main.async {
       self.obfuscatingView?.removeFromSuperview()
