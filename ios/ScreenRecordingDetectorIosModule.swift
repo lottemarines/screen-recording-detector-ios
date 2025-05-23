@@ -15,11 +15,15 @@ extension UIApplication {
 extension UIImage {
   /// LightEffect（淡いぼかし）を適用
   func applyLightEffect() -> UIImage? {
-    return applyBlur(radius: 20, tintColor: UIColor(white: 1.0, alpha: 0.3), saturationDeltaFactor: 1.8)
+    return applyBlur(radius: 20,
+                     tintColor: UIColor(white: 1.0, alpha: 0.3),
+                     saturationDeltaFactor: 1.8)
   }
 
   /// Apple サンプルをベースにした GaussianBlur + Saturation
-  private func applyBlur(radius blurRadius: CGFloat, tintColor: UIColor?, saturationDeltaFactor: CGFloat) -> UIImage? {
+  private func applyBlur(radius blurRadius: CGFloat,
+                         tintColor: UIColor?,
+                         saturationDeltaFactor: CGFloat) -> UIImage? {
     guard let cgImage = cgImage else { return nil }
     let imageRect = CGRect(origin: .zero, size: size)
     var effectImage = self
@@ -55,8 +59,7 @@ extension UIImage {
 public class ScreenRecordingDetectorIosModule: Module {
   // MARK: - Properties
   private var obfuscatingView: UIImageView?
-  private var protectionEnabled = false
-  private var secureField: UITextField?
+  private var secureFields: [UITextField] = []
 
   public func definition() -> ModuleDefinition {
     Name("ScreenRecordingDetectorIos")
@@ -72,24 +75,35 @@ public class ScreenRecordingDetectorIosModule: Module {
     // 通知登録
     OnStartObserving {
       let nc = NotificationCenter.default
-      nc.addObserver(forName: UIScreen.capturedDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+      // 画面録画検知
+      nc.addObserver(forName: UIScreen.capturedDidChangeNotification,
+                     object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": UIScreen.main.isCaptured])
       }
-      nc.addObserver(forName: UIApplication.userDidTakeScreenshotNotification, object: nil, queue: .main) { [weak self] _ in
+      // スクリーンショット検知
+      nc.addObserver(forName: UIApplication.userDidTakeScreenshotNotification,
+                     object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onScreenshotTaken", [:])
-        self.insertSecureTextField()
+        // 1. 全サブビューに SecureTextField を貼る
+        self.protectViewsWithSecureTextField()
+        // 2. ブラーオーバーレイを貼る
         self.applyBlurOverlay()
+        // 3. 数秒後に解除
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-          self.removeSecureTextField()
+          self.removeAllSecureTextFields()
           self.removeBlurOverlay()
         }
       }
-      nc.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      // アプリがバックグラウンドへ
+      nc.addObserver(forName: UIApplication.willResignActiveNotification,
+                     object: nil, queue: .main) { [weak self] _ in
         self?.applyBlurOverlay()
       }
-      nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+      // フォアグラウンド復帰
+      nc.addObserver(forName: UIApplication.didBecomeActiveNotification,
+                     object: nil, queue: .main) { [weak self] _ in
         self?.removeBlurOverlay()
         self?.sendEvent("onScreenRecordingChanged", ["isCaptured": UIScreen.main.isCaptured])
       }
@@ -103,54 +117,69 @@ public class ScreenRecordingDetectorIosModule: Module {
     Function("getCapturedStatus") { () -> Bool in
       UIScreen.main.isCaptured
     }
-    Function("setProtectionEnabled") { (enabled: Bool) in
-      self.protectionEnabled = enabled
-      if !enabled { self.removeBlurOverlay() }
+    Function("setProtectionEnabled") { (_: Bool) in
+      // バックグラウンド時のブラー用。不要なら空実装でも可
     }
     Function("enableSecureView") { [weak self] in
-      self?.insertSecureTextField()
+      self?.protectViewsWithSecureTextField()
     }
     Function("disableSecureView") { [weak self] in
-      self?.removeSecureTextField()
+      self?.removeAllSecureTextFields()
     }
   }
 
   // MARK: - Private Helpers
-  private func scheduleDelayedChecks(initialCaptured: Bool, attempts: Int, interval: TimeInterval) {
+  private func scheduleDelayedChecks(initialCaptured: Bool,
+                                     attempts: Int,
+                                     interval: TimeInterval) {
     guard attempts > 0 else { return }
     DispatchQueue.main.asyncAfter(deadline: .now() + interval) {
       let current = UIScreen.main.isCaptured
       if current != initialCaptured {
         self.sendEvent("onScreenRecordingChanged", ["isCaptured": current])
       }
-      self.scheduleDelayedChecks(initialCaptured: initialCaptured, attempts: attempts - 1, interval: interval)
+      self.scheduleDelayedChecks(initialCaptured: initialCaptured,
+                                 attempts: attempts - 1,
+                                 interval: interval)
     }
   }
 
-  /// キャプチャレイヤーを隠す黒い SecureTextField を挿入
-  private func insertSecureTextField() {
+  /// 全サブビュー再帰的に UITextField.secureTextEntry を貼る
+  private func protectViewsWithSecureTextField() {
     guard let window = UIApplication.shared.activeWindow else { return }
-    DispatchQueue.main.async {
-      let tf = UITextField(frame: window.bounds)
+    // 直前キャプチャ→ぼかし画像
+    UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
+    window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
+    let snapshot = UIGraphicsGetImageFromCurrentImageContext()
+    UIGraphicsEndImageContext()
+    let blurred = snapshot?.applyLightEffect()
+
+    func addSecure(to view: UIView) {
+      let tf = UITextField(frame: view.bounds)
       tf.isSecureTextEntry = true
-      tf.backgroundColor = .black
+      if let bg = blurred {
+        tf.backgroundColor = UIColor(patternImage: bg)
+      } else {
+        tf.backgroundColor = .black
+      }
       tf.isUserInteractionEnabled = false
-      window.addSubview(tf)
-      self.secureField = tf
+      view.addSubview(tf)
+      secureFields.append(tf)
+      view.subviews.forEach(addSecure)
     }
+
+    window.subviews.forEach(addSecure)
   }
 
-  /// SecureTextField を削除
-  private func removeSecureTextField() {
-    DispatchQueue.main.async {
-      self.secureField?.removeFromSuperview()
-      self.secureField = nil
-    }
+  /// 貼ったすべての SecureTextField を削除
+  private func removeAllSecureTextFields() {
+    secureFields.forEach { $0.removeFromSuperview() }
+    secureFields.removeAll()
   }
 
   /// 画面をキャプチャしてブラーオーバーレイを表示
   private func applyBlurOverlay() {
-    guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
+    guard let window = UIApplication.shared.activeWindow else { return }
     UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
     window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
     let snapshot = UIGraphicsGetImageFromCurrentImageContext()
