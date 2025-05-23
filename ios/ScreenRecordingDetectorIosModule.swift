@@ -79,7 +79,14 @@ public class ScreenRecordingDetectorIosModule: Module {
       nc.addObserver(forName: UIApplication.userDidTakeScreenshotNotification, object: nil, queue: .main) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onScreenshotTaken", [:])
+        // スクリーンショット直後に SecureTextField とブラーを掛ける
+        self.enableSecureView()
         self.applyBlurOverlay()
+        // 数秒後に解除
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+          self.disableSecureView()
+          self.removeBlurOverlay()
+        }
       }
       nc.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
         self?.applyBlurOverlay()
@@ -103,12 +110,12 @@ public class ScreenRecordingDetectorIosModule: Module {
       if !enabled { self.removeBlurOverlay() }
     }
     Function("enableSecureView") {
-      // Secure TextField ハック：スクショ撮影時に画面を隠蔽
       guard let window = UIApplication.shared.activeWindow else { return }
       DispatchQueue.main.async {
+        // SecureTextFieldハック: スクショ用に真っ黒レイヤー
         let tf = UITextField(frame: window.bounds)
         tf.isSecureTextEntry = true
-        tf.backgroundColor = .clear  // 透明のままにして、見た目は変えない
+        tf.backgroundColor = .black
         tf.isUserInteractionEnabled = false
         window.addSubview(tf)
         self.secureField = tf
@@ -136,6 +143,7 @@ public class ScreenRecordingDetectorIosModule: Module {
 
   private func applyBlurOverlay() {
     guard protectionEnabled, let window = UIApplication.shared.activeWindow else { return }
+    // 画面をキャプチャしてぼかし
     UIGraphicsBeginImageContextWithOptions(window.bounds.size, false, 0)
     window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
     let snapshot = UIGraphicsGetImageFromCurrentImageContext()
@@ -146,9 +154,6 @@ public class ScreenRecordingDetectorIosModule: Module {
     iv.tag = 0xB10B
     window.addSubview(iv)
     obfuscatingView = iv
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-      self.removeBlurOverlay()
-    }
   }
 
   private func removeBlurOverlay() {
